@@ -924,7 +924,13 @@
    real vive UNA sola vez, en el cuerpo (.ex-name). -------------- */
 .block .block-header{ gap: 10px !important; }
 .block .block-label{
-  font-family: var(--font-mono, 'JetBrains Mono', monospace) !important;
+  /* pulido: usaba la mono táctica (JetBrains Mono) -- el pedido es que
+     lleve la tipografía de marca, la misma que ya usan .ex-name, h1-h4
+     y el resto de los títulos del sistema (--font-head, Chakra Petch/
+     Barlow Condensed). Esta regla es más específica que la genérica
+     compartida (.block-label{font-family:var(--font-head)!important})
+     así que sin este cambio seguía ganando la mono de acá. */
+  font-family: var(--font-head, 'Chakra Petch', 'Barlow Condensed', sans-serif) !important;
   font-size: 10.5px !important;
   font-weight: 700 !important;
   letter-spacing: .01em !important;
@@ -999,6 +1005,15 @@
 .set-tracker .set-row.set-row-expanded{
   order: -1;
   flex: 1 1 100%;
+  /* fix de desborde: sin min-width:0 un hijo flex nunca se achica por
+     debajo del ancho mínimo de su contenido (acá, los dígitos grandes
+     de 2.1rem + el check de 48px, todos "unshrinkable") -- eso empujaba
+     esta fila más allá del borde derecho de la tarjeta en viewports
+     angostos (360px) en vez de respetar flex-basis:100%. box-sizing
+     explícito porque el padding de 14px cuenta hacia ese mismo ancho. */
+  min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
   border-color: rgba(210,121,63,.55) !important;
   background: rgba(210,121,63,.07) !important;
   border-radius: 14px !important;
@@ -1010,6 +1025,14 @@
   min-width: 56px; max-width: 104px;
   padding: 8px 4px !important;
   border-radius: 12px !important;
+  /* pulido de experiencia del alumno: un módulo aparte ("Focus mode de
+     serie activa", .set-tracker.foco) apaga a opacity:.4 todo lo que no
+     sea la serie activa -- pensado para una lista vertical vieja, acá
+     sumaba un segundo efecto de "apagado" sobre chips que ya se
+     distinguen solos por color de borde (pendiente/hecha), y hacía más
+     difícil leer qué serie era cuál. Se neutraliza sólo en esta tira
+     compacta; el resto de .foco (glow de la fila activa) sigue intacto. */
+  opacity: 1 !important;
 }
 .set-tracker .set-row:not(.set-row-active):not(.set-row-expanded) .set-load{ display: none !important; }
 .set-tracker .set-row:not(.set-row-active):not(.set-row-expanded) .set-row-toggle{
@@ -1025,12 +1048,35 @@
 .set-tracker .set-row.set-row-done:not(.set-row-active):not(.set-row-expanded){
   border-color: rgba(111,191,149,.35) !important;
 }
+/* pulido de experiencia del alumno: antes se ocultaba el toggle entero
+   en la fila activa, así que la caja grande de carga no decía en
+   ningún lado qué serie era -- un alumno nuevo veía "Kg × Reps" vacío
+   sin saber si era la serie 1, 2 o 3. Se deja de ocultar y en cambio
+   se muestra sólo la etiqueta ("SET N", ver badges() más abajo) como
+   título fijo arriba de los inputs; el resumen "—"/"62.5×10" no hace
+   falta acá (los inputs de abajo ya muestran el dato real) y el botón
+   deja de comportarse como toggle (nada para expandir/colapsar cuando
+   ya está expandida). */
 .set-tracker .set-row.set-row-active .set-row-toggle,
-.set-tracker .set-row.set-row-expanded .set-row-toggle{ display: none; }
+.set-tracker .set-row.set-row-expanded .set-row-toggle{
+  display: flex !important; width: auto; pointer-events: none;
+  padding: 0 0 2px !important; justify-content: flex-start;
+}
+.set-tracker .set-row.set-row-active .set-row-toggle .set-row-compact,
+.set-tracker .set-row.set-row-expanded .set-row-toggle .set-row-compact{ display: none; }
+.set-tracker .set-row.set-row-active .set-row-toggle .set-row-label,
+.set-tracker .set-row.set-row-expanded .set-row-toggle .set-row-label{
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px; font-weight: 800; letter-spacing: .08em;
+  color: var(--jp-cyan, #7CC5E8);
+}
 .set-tracker .set-row.set-row-active .set-load,
 .set-tracker .set-row.set-row-expanded .set-load{
   display: flex !important; align-items: center !important; gap: 10px !important;
+  min-width: 0; width: 100%;
 }
+.set-tracker .set-row.set-row-active .set-load > .set-field,
+.set-tracker .set-row.set-row-expanded .set-load > .set-field{ min-width: 0; flex: 1 1 0; }
 .set-tracker .set-row.set-row-expanded .set-kg,
 .set-tracker .set-row.set-row-expanded .set-reps{ font-size: 1.1rem !important; }
 /* escala numérica grande: general a propósito (también embellece la
@@ -1041,8 +1087,19 @@
   font-size: 2.1rem !important;
   font-weight: 700 !important;
   color: var(--text-primary, #EDEFF2) !important;
-  background: transparent !important; border: none !important;
-  width: auto !important; max-width: 92px; padding: 0 !important; text-align: center;
+  /* pulido de fidelidad: transparente/sin borde leía como texto suelto
+     encima de un contenedor apagado, no como un campo de carga real --
+     vuelve a tener fondo oscuro táctico y borde con contraste (mismo
+     lenguaje que el resto de los inputs del sistema, sólo más grande). */
+  background: rgba(7,8,10,.6) !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  border-radius: 12px !important;
+  width: auto !important; max-width: 92px; padding: 6px 4px !important; text-align: center;
+}
+.set-row.set-row-active .set-kg:focus,
+.set-row.set-row-active .set-reps:focus{
+  border-color: rgba(210,121,63,.65) !important;
+  box-shadow: 0 0 0 3px rgba(210,121,63,.14) !important;
 }
 .set-row.set-row-active .set-x{ font-size: 1.3rem; opacity: .4; }
 .set-row.set-row-active .set-check{
@@ -2993,7 +3050,10 @@ function blockIconHtml(raw){
    "[ SENTADILLA CON BA... ]". block.title/weekName no se pierden (siguen
    en el dato, no se muestran acá); el nombre real vive una sola vez, en
    .ex-name dentro del cuerpo. */
-const ROL_BLOQUE_CAT = { strength:'Principal', accessory:'Accesorio', metcon:'Finisher', cardio:'Cardio', warmup:'Entrada en calor' };
+/* "Entrada en calor" truncaba con el rótulo más grande (pulido de
+   jerarquía visual) -- "Calentamiento" dice lo mismo en menos caracteres
+   y entra completo en el ancho del header. */
+const ROL_BLOQUE_CAT = { strength:'Principal', accessory:'Accesorio', metcon:'Finisher', cardio:'Cardio', warmup:'Calentamiento' };
 function rolBloque(block){
   if(block.isSuperset) return block.isTriset ? 'Triset' : 'Biset';
   if(block.isFinisher) return 'Finisher';
@@ -3726,7 +3786,10 @@ body.focus-mode .tv-nav{display:flex}
 .rest-hud:not(.expanded) .rh-ring::after{content:none !important}
 .rest-hud:not(.expanded) .rh-time{order:1;font-size:1.05rem !important}
 .rest-hud:not(.expanded) .rh-ring .rh-time{font-size:1.05rem !important}
-.rest-hud:not(.expanded) #rhTime::before{content:'⏱️ ';font-size:.8rem}
+/* directiva de pulido visual: el ⏱️ generado acá se superponía sobre los
+   dígitos del contador ("01:20"), dificultando la lectura -- se retira
+   por completo; el widget colapsado ya deja en claro que es un
+   temporizador por su forma de píldora + label "Descanso" contiguo. */
 .rest-hud:not(.expanded) .rh-set{display:none !important}
 .rest-hud:not(.expanded) .rh-ctl{order:2;gap:4px}
 .rest-hud:not(.expanded) .rh-ctl #rhMinus,
@@ -10013,16 +10076,19 @@ body.cf-modo .block .wod-board,body.cf-modo .block .cf-board{display:block !impo
      "Serie 1"/"Serie 2" a "S1"/"S2", y "S1".."S4" son tambien la
      abreviatura oficial de las SEMANAS del mesociclo (ver WEEKS_META /
      week-pill) -- el atleta veía "S2" en una tarjeta de ejercicio y creía
-     que había cambiado de semana. Se compacta a "R" + número (Ronda/Round
-     de la serie) en vez de "S" + número: mismo ancho, cero ambigüedad con
-     la letra reservada para semanas. Se guarda "R" en vez de "S" tambien
-     en el regex de guarda (evita que un repintado repetido vuelva a
-     tocar un label que ya quedó compactado). */
+     que había cambiado de semana. Se había compactado a "R" + número
+     (Ronda/Round) para evitar la letra reservada de semanas, pero "R1"
+     resultó su propia ambigüedad nueva (se lee "Ronda 1", que sólo
+     existe de verdad en biset/triset) -- en un bloque simple de series
+     rectas no hay ninguna ronda, así que confundía igual. Pulido de
+     experiencia del alumno: pasa a "SET " + número -- palabra completa,
+     nada que ver visualmente con la "S1" de semana, y es el término que
+     ya usa toda la interfaz (Kg×Reps, no Ronda) para una serie suelta. */
   function badges(){
     document.querySelectorAll('.set-row-label').forEach(function(l){
       var t = l.textContent.trim();
       var m = t.match(/(\d+)/);
-      if(m && !/^R\d+$/.test(t)) l.textContent = 'R' + m[1];
+      if(m && !/^SET \d+$/.test(t)) l.textContent = 'SET ' + m[1];
     });
   }
   /* al completar una serie, la siguiente hereda los kilos */
@@ -14230,17 +14296,28 @@ body{font-size:var(--fz-body) !important}
 /* rediseño F: el rótulo es metadata chica (rol del bloque, "[ BLOQUE A · PRINCIPAL ]"),
    no el título -- ya no escala con --fz-title (pensado para el nombre grande) porque
    eso lo hacía desbordar/truncarse contra el checkbox y el chevron del header. */
+/* pulido de jerarquía visual: el rótulo venía demasiado apagado (10.5px,
+   tono hueso apenas distinguible del fondo) -- pierde contra el resto de
+   la tarjeta. Sube a 13px/800 para que el bloque se identifique de un
+   vistazo; el borde inferior del header (base del sistema, sin tocar)
+   ya lo separa del cuerpo. Segunda vuelta: el dorado de marca se leía
+   parecido al resto de los acentos oro de la tarjeta (check, chips) y
+   no se distinguía como metadata -- pasa a celeste táctico (--jp-cyan,
+   el mismo cyan que ya usa el sistema para tempo/tiempo), monoespaciado,
+   con buen contraste sobre el fondo oscuro. */
 .block .block-label{
-  font-size:10.5px !important;
+  font-size:13px !important;
   line-height:1.3 !important;
-  font-weight:700 !important;
-  letter-spacing:.01em !important;
-  color:var(--jp-bone) !important;
+  font-weight:800 !important;
+  letter-spacing:.015em !important;
+  color:var(--jp-cyan,#7CC5E8) !important;
 }
-/* la categoría se lee por el ícono y la barra lateral, no por el color del título */
+/* el rótulo ya lleva el acento celeste siempre -- la categoría se sigue
+   leyendo por el ícono y la barra lateral, no hace falta variarlo por
+   bloque (antes quedaba igual de apagado en todas las categorías). */
 .block.cat-strength .block-label,.block.cat-metcon .block-label,
 .block.cat-warmup .block-label,.block.cat-cardio .block-label,
-.block.cat-accessory .block-label{color:var(--jp-bone) !important}
+.block.cat-accessory .block-label{color:var(--jp-cyan,#7CC5E8) !important}
 .block .block-subtitle{
   font-size:var(--fz-sub) !important;color:var(--jp-titanium) !important;
   line-height:1.45 !important;font-weight:400 !important;letter-spacing:0 !important;text-transform:none !important;
@@ -15116,6 +15193,23 @@ body{
   border-color:rgba(124,197,232,.55) !important;background:rgba(124,197,232,.07) !important;
 }
 .block.cat-metcon .set-row.set-activa .set-row-label{background:var(--jp-ice) !important;color:#07080A !important}
+/* pulido de experiencia del alumno: el módulo de foco/PR de arriba
+   (.set-activa) pinta el label con fondo de acento y texto casi negro
+   -- pensado para un chip chico, no para "SET N" que ahora vive como
+   título fijo arriba de la caja de carga activa (ver .set-row-toggle
+   más arriba en el archivo). Cuando .set-activa coincide con la misma
+   fila que .set-row-active/.set-row-expanded el texto quedaba casi
+   invisible (negro sobre el fondo oscuro de la fila). Sin ".set-tracker"
+   en la cadena a propósito: unificar() (biset/triset) desarma ese
+   contenedor al mover la fila a .bs-fila, así que exigirlo dejaba esta
+   regla sin efecto justo ahí -- ".set-row" repetido compensa la
+   especificidad que se pierde al sacarlo. Mayor especificidad + después
+   en la cascada que las reglas de arriba, en cualquiera de los dos casos. */
+.block .set-row.set-row.set-activa.set-row-active .set-row-toggle .set-row-label,
+.block .set-row.set-row.set-activa.set-row-expanded .set-row-toggle .set-row-label{
+  background: transparent !important;
+  color: var(--jp-cyan, #7CC5E8) !important;
+}
 .block.cat-metcon .block-methodology-accordion[open] > .methodology-summary,
 .block.cat-cardio .block-methodology-accordion[open] > .methodology-summary{color:var(--jp-ice) !important}
 /* la entrada en calor también es tiempo, pero en tono bajo */
