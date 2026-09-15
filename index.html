@@ -425,7 +425,7 @@
   .wab-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%;
     background: var(--jp-brand, #D2793F); box-shadow: 0 0 8px rgba(210,121,63,0.7); }
   .wab-text { white-space: normal; }
-  .week-tabs-wrap { background: rgba(14,14,15,0.95); border-bottom: 1px solid var(--border); position: sticky; top: 105px; z-index: 100; overflow-x: auto; }
+  .week-tabs-wrap { background: rgba(14,14,15,0.95); border-bottom: 1px solid var(--border); position: sticky; top: 105px; z-index: 100; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
   .week-tabs-wrap::-webkit-scrollbar { display: none; }
   .week-tabs { max-width: 1140px; margin: 0 auto; display: flex; padding: 0 1.25rem; min-width: max-content; }
   .day-tab { display: flex; flex-direction: column; align-items: center; padding: 0.7rem 1.1rem; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s ease; gap: 2px; min-width: 80px; user-select: none; }
@@ -449,17 +449,18 @@
   .day-view.active { display: block; animation: dayFadeIn 0.4s cubic-bezier(0.16,1,0.3,1); }
   @keyframes dayFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   .day-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: var(--sp-6); padding-top: var(--sp-5); flex-wrap: wrap; }
-  /* workout-first (13/09): .day-header ahora vive DESPUÉS de .blocks-stack
-     (antes era lo primero del día) -- el padding-top que separaba del
-     progress-bar-wrap de arriba ahora sobra ahí y hace falta como
-     separación respecto del último bloque de arriba. .blocks-stack (o el
-     banner de foco técnico, si el día lo trae) pasan a ser lo primero, así
-     que son ellos los que ahora necesitan ese aire superior. */
-  .day-view > .day-header { padding-top: 0; margin-top: var(--sp-6); }
-  .day-view > .blocks-stack:first-child,
-  .day-view > .safety-banner:first-child { margin-top: var(--sp-5); }
+  /* pulido de jerarquía: .day-header vuelve a ser lo primero del día
+     (reportado "descolgado muy abajo, espacio vacío y barra cortada
+     arriba" en la posición post-bloques de "workout-first") -- el
+     padding-top de la regla base ya separa del selector de días de
+     arriba, sin margin-top extra que sume aire de más. */
+  .day-view > .day-header { margin-top: 0; }
   .day-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.3rem; }
-  .day-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: clamp(1.5rem, 4vw, 2.1rem); letter-spacing: 0.01em; line-height: 1.1; }
+  /* la tipografía técnica oficial del sistema (--font-head, Chakra
+     Petch) en vez de Barlow Condensed -- se veía "genérica/pesada",
+     desentonaba con el resto del branding (block-label, ex-name, etc.
+     ya usan --font-head). */
+  .day-title { font-family: var(--font-head, 'Chakra Petch', 'Barlow Condensed', sans-serif); font-weight: 700; font-size: clamp(1.5rem, 4vw, 2.1rem); letter-spacing: 0.02em; line-height: 1.1; }
   .day-meta-row { display: flex; gap: 7px; margin-top: 0.5rem; flex-wrap: wrap; }
   .meta-chip { background: rgba(124,197,232,0.08); border: 1px solid rgba(124,197,232,0.22); color: var(--red-light); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.05em; }
   .day-complete-btn { background: rgba(74,147,184,0.1); border: 1px solid rgba(74,147,184,0.3); color: var(--teal); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.07em; text-transform: uppercase; padding: 10px 22px; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease; white-space: nowrap; align-self: flex-start; }
@@ -1923,7 +1924,19 @@ function _spSerialize(){
 }
 function _spFlush(){
   if(!_spDirty) return;
-  try{ localStorage.setItem(STORAGE_KEY, _spSerialize()); }catch(e){}
+  /* directiva (timer en segundo plano persistente): esto pisaba TODO el
+     blob de localStorage con sólo los campos de "state" -- cualquier
+     campo aparte que otro módulo hubiera guardado en la misma clave
+     (ej. restTimer, agregado más abajo para que el descanso sobreviva
+     a un cierre real de la app) desaparecía cada vez que este flush
+     corría, y corre justo en pagehide/visibilitychange:hidden -- el
+     instante exacto en que background timer más lo necesita. Pasa a
+     mezclar sobre lo que ya había en vez de reemplazarlo entero. */
+  try{
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    Object.assign(raw, JSON.parse(_spSerialize()));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
+  }catch(e){}
   _spDirty = false;
 }
 function saveProgress(){
@@ -2388,7 +2401,7 @@ var CoachVibra = (function(){
   return {
     soporta: function(){ return soporta; },
     cuenta:  function(){ return disparar(200); },   /* segundos 3, 2 y 1 */
-    fin:     function(){ return disparar(500); },   /* final del conteo   */
+    fin:     function(){ return disparar([200, 100, 200, 100, 400]); },   /* final del conteo   */
     toque:   function(){ return disparar(20); },    /* feedback de botón  */
     patron:  function(p){ return disparar(p); }
   };
@@ -3114,15 +3127,19 @@ function renderMain(){
   const blocks = visibleBlocks(day);
   const dayDone = isDayDone(weekIdx, day.id);
   let html = '<div class="day-view active">';
-  /* DIRECTIVA "WORKOUT-FIRST" (13/09): el primer bloque de ejercicio va
-     INMEDIATAMENTE debajo del selector de día/semana (arriba del pliegue,
-     sin scroll). El header grande del día (título duplicado, ya lo dice
-     el selector de arriba), el contexto de sesión, el check-in de
-     readiness y el foco técnico/nutrición pasan a vivir DESPUÉS de los
-     bloques: cero dato ni funcionalidad se pierde (mismos ids, mismos
-     listeners via wireReadinessCheckin/wireBlockInteractions, que ya
-     buscan los nodos en el DOM recién pintado sin importar su posición),
-     solo se reordena la jerarquía visual. */
+  /* pulido de jerarquía (directiva posterior a "workout-first"): el
+     header del día había quedado DESPUÉS de los bloques -- reportado
+     como "descolgado muy abajo, con espacio vacío y una barra cortada
+     arriba". Vuelve a ser lo primero que se ve, pegado debajo del
+     selector de días, sin tocar ningún dato ni listener (wireBlockInteractions/
+     wireReadinessCheckin siguen buscando los mismos ids en el DOM ya
+     pintado, sin importar el orden). */
+  html += '<div class="day-header">';
+  html += '<div><div class="day-eyebrow">' + day.short + ' — ' + WEEKS_META[weekIdx].name + '</div>';
+  html += '<div class="day-title">' + day.title + '</div>';
+  html += '<div class="day-meta-row">' + (day.metaChips||[]).map(function(c){ return '<span class="meta-chip">' + c + '</span>'; }).join('') + '</div></div>';
+  html += '<button class="day-complete-btn' + (dayDone?' done':'') + '" id="dayCompleteBtn">' + (dayDone?'✓ Día Completo':'Marcar Día Completo') + '</button>';
+  html += '</div>';
   /* UX/UI integral (13/09), parte 1: "Foco Técnico del Día" pasa de banner
      fijo (empujaba el primer bloque hacia abajo) a micro-acordeón cerrado
      por defecto -- mismo patrón <details>/<summary> que .nutri-card y
@@ -3136,12 +3153,6 @@ function renderMain(){
   }
   html += '<div class="blocks-stack">';
   blocks.forEach(function(b, idx){ html += renderBlock(b, day, weekIdx, idx); });
-  html += '</div>';
-  html += '<div class="day-header">';
-  html += '<div><div class="day-eyebrow">' + day.short + ' — ' + WEEKS_META[weekIdx].name + '</div>';
-  html += '<div class="day-title">' + day.title + '</div>';
-  html += '<div class="day-meta-row">' + (day.metaChips||[]).map(function(c){ return '<span class="meta-chip">' + c + '</span>'; }).join('') + '</div></div>';
-  html += '<button class="day-complete-btn' + (dayDone?' done':'') + '" id="dayCompleteBtn">' + (dayDone?'✓ Día Completo':'Marcar Día Completo') + '</button>';
   html += '</div>';
   html += renderContextoSesion();
   html += renderReadinessCard(weekIdx, day);
@@ -3987,8 +3998,8 @@ body.nav-stuck .week-selector-wrap,body.nav-stuck .week-tabs-wrap{box-shadow:0 6
       navigator.serviceWorker.getRegistration().then(function(reg){
         if(!reg || !reg.showNotification) return;
         reg.showNotification('Descanso completado · Coach JP', {
-          body: 'Listo para la siguiente serie. ¡A los fierros!',
-          vibrate: [200, 100, 200],
+          body: '¡Tiempo cumplido! Dale a la siguiente serie 🔥',
+          vibrate: [200, 100, 200, 100, 400],
           tag: 'coachjp-descanso',
           renotify: true
         }).catch(function(){});
@@ -4021,6 +4032,22 @@ body.nav-stuck .week-selector-wrap,body.nav-stuck .week-tabs-wrap{box-shadow:0 6
     }
     pintarRest();
   }
+  /* directiva (timer en segundo plano persistente): el resync por
+     visibilitychange/focus/pageshow de arriba ya cubre "minimizar,
+     bloquear el celular, cambiar de app" -- pero si el navegador o el
+     SO matan la pestaña de verdad (memoria baja, PWA recién reabierta)
+     restTargetEnd se pierde por completo, al vivir sólo en memoria. Se
+     guarda en el mismo blob de localStorage que ya usa este módulo
+     (STORAGE_KEY, ver _spFlush arriba) para poder reconstruir la cuenta
+     regresiva al milisegundo exacto también después de un cierre real. */
+  function guardarRestTimer(){
+    try{
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      if(restRun) raw.restTimer = { targetEnd: restTargetEnd, total: restTotal, label: hudLb.textContent };
+      else delete raw.restTimer;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
+    }catch(e){}
+  }
   function arrancarRest(seg, etiqueta){
     pedirPermisoNotifDescanso();
     restLeft = seg || state.restSec;
@@ -4030,8 +4057,9 @@ body.nav-stuck .week-selector-wrap,body.nav-stuck .week-tabs-wrap{box-shadow:0 6
     hud.classList.add('on'); restRun = true;
     clearInterval(restInt); restInt = setInterval(tick, 1000);
     pintarRest();
+    guardarRestTimer();
   }
-  function pararRest(){ restRun = false; clearInterval(restInt); restInt = null; pintarRest(); }
+  function pararRest(){ restRun = false; clearInterval(restInt); restInt = null; pintarRest(); guardarRestTimer(); }
   /* directiva10 -- resync forzado (Page Visibility API), llamado apenas la
      app vuelve a primer plano: recalcula restLeft contra restTargetEnd YA,
      sin esperar el próximo tick natural del setInterval (que en background
@@ -4061,6 +4089,7 @@ body.nav-stuck .week-selector-wrap,body.nav-stuck .week-tabs-wrap{box-shadow:0 6
     restTargetEnd = Date.now() + restLeft * 1000;
     try{ if(navigator.vibrate) navigator.vibrate(20); }catch(e){}
     pintarRest();
+    guardarRestTimer();
   }
   document.getElementById('rhPlus').addEventListener('click', function(){ sumarRest(30); });
   document.getElementById('rhToggle').addEventListener('click', function(){
@@ -4074,6 +4103,7 @@ body.nav-stuck .week-selector-wrap,body.nav-stuck .week-tabs-wrap{box-shadow:0 6
       clearInterval(restInt); restInt = null;
     }
     pintarRest();
+    guardarRestTimer();
   });
   hud.querySelectorAll('[data-rest]').forEach(b => b.addEventListener('click', function(){
     state.restSec = parseInt(b.dataset.rest, 10);
@@ -4085,6 +4115,26 @@ body.nav-stuck .week-selector-wrap,body.nav-stuck .week-tabs-wrap{box-shadow:0 6
   });
   window.addEventListener('pageshow', sincronizarRestActivo);
   window.addEventListener('focus', sincronizarRestActivo);
+
+  /* restaura un descanso activo guardado en localStorage al cargar la
+     página de cero (la pestaña se cerró/mató de verdad, no sólo se
+     minimizó) -- reconstruye restTargetEnd desde el timestamp absoluto
+     guardado y llama a tick() ya mismo: si el descanso se cumplió
+     mientras la app estaba cerrada, dispara la finalización en el acto
+     en vez de dejarlo "colgado" (mismo criterio que sincronizarRestActivo). */
+  (function restaurarRestTimer(){
+    try{
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const rt = raw.restTimer;
+      if(!rt || !(rt.targetEnd > 0)) return;
+      restTargetEnd = rt.targetEnd;
+      restTotal = rt.total || 90;
+      hudLb.textContent = rt.label || 'Descanso';
+      hud.classList.add('on'); restRun = true;
+      clearInterval(restInt); restInt = setInterval(tick, 1000);
+      tick();
+    }catch(e){}
+  })();
 
   /* =========================================================
      2) NEW PR
@@ -4457,10 +4507,42 @@ body.nav-stuck .week-selector-wrap,body.nav-stuck .week-tabs-wrap{box-shadow:0 6
     });
     const sh = document.getElementById('scShare');
     if(sh) sh.addEventListener('click', function(){
-      const txt = '🏁 ' + PROGRAM_CONFIG.athleteName + ' — ' + day.short + ' (' + WEEKS_META[weekIdx].short + ')\n' +
-        '💪 Volumen: ' + d.vol + ' kg · ' + d.series + ' series · ' + d.reps + ' reps\n' +
-        (prs.length ? '🔥 PR: ' + prs.join(', ') + '\n' : '') +
-        ((state.notes && state.notes[nkey]) ? '📝 ' + state.notes[nkey] : '');
+      /* reparación del reporte de WhatsApp: antes "prs" (arriba, state.
+         session.prs) era el resultado de chequearPR()/mejorPrevio(), que
+         matchea nombres por substring contra TODO el catálogo (PRS_N) --
+         eso es lo que terminaba concatenando ejercicios de más en el
+         mensaje. Acá se usa state.session.prDetalle en cambio: lo llena
+         capturarPR()/anotarMarca() (arriba, mismo archivo), que compara
+         la marca real contra el mejor 1RM estimado previo -- sin falsos
+         positivos por nombre parecido. prDetalle es el log de TODO el
+         mesociclo (nunca se resetea), así que se filtra por la fecha de
+         hoy para que el reporte sea sólo de esta sesión. */
+      const hoyISO = new Date().toISOString().slice(0, 10);
+      const prsHoy = ((state.session && state.session.prDetalle) || []).filter(function(p){ return p.fecha === hoyISO; });
+      const prLineas = prsHoy.length
+        ? prsHoy.map(function(p){
+            const deltaTxt = (p.delta != null && p.delta > 0) ? ' (+' + p.delta + 'kg)' : '';
+            return '🔥 PR: ' + p.ex + ' ' + p.kg + 'kg × ' + p.reps + deltaTxt;
+          }).join('\n')
+        : '🔥 Sin récords nuevos hoy';
+      /* mismo cálculo de duración que ya usa la Story Card (inyectarBoton,
+         más abajo en el archivo) -- state.session.inicio se fija una sola
+         vez, en la primera interacción real, y nunca se resetea, así que
+         se acota a un rango de sesión creíble (1 a 240 min). */
+      const ini = (state.session && state.session.inicio) || 0;
+      const elapsedMin = ini ? Math.round((Date.now() - ini) / 60000) : 0;
+      const minsCrudo = (elapsedMin >= 1 && elapsedMin <= 240) ? elapsedMin : Math.max(1, d.series * 3 || 55);
+      const rpeHoy = checkoutRpeLeer()[nkey];
+      const notaHoy = (state.notes && state.notes[nkey]) || '';
+      let txt = '🏁 COACH JP · REPORTE DE SESIÓN\n' +
+        '👤 ' + PROGRAM_CONFIG.athleteName + ' — ' + day.short + ' (' + WEEKS_META[weekIdx].short + ')\n\n' +
+        '📊 RESUMEN DE SESIÓN\n' +
+        '• Volumen Total: ' + d.vol + ' kg\n' +
+        '• Series Completadas: ' + d.series + ' sets (' + d.reps + ' reps)\n' +
+        '• Tiempo: ' + minsCrudo + ' min\n\n' +
+        prLineas;
+      if(rpeHoy) txt += '\n\n💪 Esfuerzo percibido (RPE): ' + rpeHoy + '/10';
+      if(notaHoy) txt += '\n📝 ' + notaHoy;
       const url = 'https://wa.me/?text=' + encodeURIComponent(txt);
       window.open(url, '_blank', 'noopener');
     });
@@ -4945,7 +5027,15 @@ header.masthead.hd-top{justify-content:center !important;gap:14px}
   padding:16px;background:rgba(4,5,8,.92);backdrop-filter:blur(10px)}
 .story-wrap.on{display:flex}
 .story-box{display:flex;flex-direction:column;gap:12px;align-items:center;max-height:96vh}
-.story-box canvas{width:auto;height:min(72vh,640px);max-width:94vw;border-radius:18px;
+/* directiva (fix integral StoryCard): el canvas es 1080x1920 real (9:16)
+   -- antes se limitaba con height:min(72vh,640px), que en viewports
+   bajos (poca altura real, con teclado abierto o en horizontal) dejaba
+   muy poco margen para los 3 botones de abajo y la tarjeta terminaba
+   tapada/cortada. aspect-ratio + max-height:65vh le deja más aire al
+   footer de acciones siempre, en cualquier alto de pantalla. */
+.story-box canvas{
+  aspect-ratio:9/16;max-height:65vh;width:auto;max-width:94vw;
+  object-fit:contain;margin:0 auto;border-radius:18px;
   box-shadow:0 26px 70px rgba(0,0,0,.7),0 0 30px rgba(210,121,63,.12);border:1px solid rgba(255,255,255,.1)}
 .story-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 .story-actions button{padding:.75rem 1.2rem;border-radius:999px;border:1px solid var(--card-border);
@@ -5293,13 +5383,21 @@ header.masthead.hd-top::before,header.masthead.hd-top::after{display:none !impor
     const g = c.getContext('2d');
     g.clearRect(0, 0, W, H);
 
-    /* fondo -- Luxury Stealth: negro base + halos dorado/cyan (antes naranja/celeste) */
-    g.fillStyle = '#08090B'; g.fillRect(0, 0, W, H);
+    /* fondo -- Dark Stealth Tactical (directiva de fix integral): gradiente
+       carbón profundo #0a0c10 -> #121820, viñeta suave hacia los bordes,
+       reflejos sutiles en los colores de marca reales (antes usaba negro
+       plano + halos en la paleta champagne "Luxury Stealth"). */
+    let bg = g.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0a0c10'); bg.addColorStop(1, '#121820');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    let vig = g.createRadialGradient(W / 2, H / 2, H * .28, W / 2, H / 2, H * .72);
+    vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(0,0,0,.45)');
+    g.fillStyle = vig; g.fillRect(0, 0, W, H);
     let r1 = g.createRadialGradient(W * .92, -120, 40, W * .92, -120, 900);
-    r1.addColorStop(0, 'rgba(229,195,120,.20)'); r1.addColorStop(1, 'rgba(229,195,120,0)');
+    r1.addColorStop(0, 'rgba(210,121,63,.18)'); r1.addColorStop(1, 'rgba(210,121,63,0)');
     g.fillStyle = r1; g.fillRect(0, 0, W, H);
     let r2 = g.createRadialGradient(-80, H + 120, 40, -80, H + 120, 900);
-    r2.addColorStop(0, 'rgba(56,189,248,.16)'); r2.addColorStop(1, 'rgba(56,189,248,0)');
+    r2.addColorStop(0, 'rgba(124,197,232,.14)'); r2.addColorStop(1, 'rgba(124,197,232,0)');
     g.fillStyle = r2; g.fillRect(0, 0, W, H);
 
     /* marca de agua JP en la esquina, al 3% */
@@ -5310,42 +5408,57 @@ header.masthead.hd-top::before,header.masthead.hd-top::after{display:none !impor
     g.fillText('JP', W - 40, H - 40);
     g.restore();
 
-    /* header -- escudo dorado en vez del asterisco suelto */
-    g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 2;
-    redondear(g, 90, 108, W - 180, 84, 42); g.stroke();
-    g.fillStyle = 'rgba(255,255,255,.05)'; g.fill();
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    escudoMini(g, 160, 150, 60);
-    g.fillStyle = '#E5C378'; g.font = '700 34px "Chakra Petch", sans-serif';
-    g.fillText('COACH JP PERFORMANCE SYSTEM', W / 2 + 34, 152);
+    /* header -- reubicado arriba de todo, 3 líneas (directiva de fix
+       integral): [ DÍA X · SEMANA Y ] chico y táctico, el título real de
+       la sesión bien grande (protagonista), y la marca COACH JP al pie
+       del bloque, nunca al revés. diaCorto/semanaN/tituloSesion vienen
+       de inyectarBoton(); si algo llama a dibujar() sin esos campos (un
+       caller viejo, o un test), se derivan de sesion/disciplina como
+       antes para no romper nada. */
+    const diaCorto = d.diaCorto || String(d.sesion || '').split(' · ')[0] || 'DÍA';
+    const semanaN = d.semanaN || (function(){ var m = String(d.disciplina || '').match(/(\d+)\s*$/); return m ? m[1] : ''; })();
+    const tituloSesion = d.tituloSesion || String(d.sesion || '').split(' · ').slice(1).join(' · ') || d.disciplina || 'Sesión';
 
-    /* atleta y fecha */
-    g.textAlign = 'left';
-    g.fillStyle = '#A0A8B4'; g.font = '500 30px Inter, sans-serif';
-    g.fillText(d.fecha.toUpperCase(), 90, 300);
-    g.fillStyle = '#FFFFFF'; g.font = '700 96px "Chakra Petch", sans-serif';
-    g.fillText(d.atleta.toUpperCase(), 90, 384);
+    /* atleta, chico, arriba de todo -- se conserva para no perder la
+       personalización, pero ya no compite con el título de la sesión */
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillStyle = 'rgba(255,255,255,.5)'; g.font = '500 26px Inter, sans-serif';
+    g.fillText((d.atleta || '').toUpperCase(), 90, 128);
 
-    /* sesión y disciplina */
-    g.fillStyle = '#E5C378'; g.font = '700 44px "Chakra Petch", sans-serif';
-    g.fillText(d.sesion.toUpperCase(), 90, 470);
-    /* el subtítulo puede ser largo (mesociclo + porcentajes + semana):
-       se envuelve en un máximo de 2 líneas y nunca pasa el margen derecho */
+    /* línea 1 -- [ DÍA X · SEMANA Y ], rótulo táctico monoespaciado */
+    g.fillStyle = '#38BDF8'; g.font = '700 32px "JetBrains Mono", ui-monospace, monospace';
+    g.fillText('[ ' + diaCorto.toUpperCase() + (semanaN ? ' · SEMANA ' + semanaN : '') + ' ]', 90, 186);
+
+    /* línea 2 -- título de la sesión, tipografía de alto impacto,
+       envuelto hasta 2 líneas si hace falta (mismo helper que ya usaba
+       el subtítulo viejo) */
+    var tituloLineas;
     (function(){
-      var maxW = W - 180, tam = 30, lineas;
+      var maxW = W - 180, tam = 84, lineas;
       var env = window.CoachEnvolverTexto || function(gg, t){ return [t]; };
       do {
-        g.font = '400 ' + tam + 'px Inter, sans-serif';
-        lineas = env(g, String(d.disciplina || ''), maxW, 2);
+        g.font = '700 ' + tam + 'px "Chakra Petch", sans-serif';
+        lineas = env(g, String(tituloSesion).toUpperCase(), maxW, 2);
         if(lineas.length <= 2 && !lineas.recortado) break;
-        tam -= 2;
-      } while(tam > 22);
-      g.fillStyle = '#A0A8B4';
-      lineas.forEach(function(ln, i){ g.fillText(ln, 90, 522 + i * (tam + 8)); });
+        tam -= 6;
+      } while(tam > 48);
+      tituloLineas = { lineas: lineas, tam: tam };
+      g.fillStyle = '#FFFFFF';
+      lineas.forEach(function(ln, i){ g.fillText(ln, 90, 268 + i * (tam + 14)); });
     })();
+    var yTrasTitulo = 268 + tituloLineas.lineas.length * (tituloLineas.tam + 14) + 26;
+
+    /* línea 3 -- COACH JP · HIGH PERFORMANCE SYSTEM, con isotipo, al pie
+       del bloque de encabezado */
+    escudoMini(g, 116, yTrasTitulo + 26, 46);
+    g.textAlign = 'left'; g.textBaseline = 'middle';
+    g.fillStyle = '#E5C378'; g.font = '700 28px "Chakra Petch", sans-serif';
+    g.fillText('COACH JP · HIGH PERFORMANCE SYSTEM', 150, yTrasTitulo + 26);
+    g.textBaseline = 'alphabetic';
 
     /* línea volt */
-    g.fillStyle = '#E5C378'; g.fillRect(90, 566, 150, 6);
+    var yAccent = yTrasTitulo + 76;
+    g.fillStyle = '#E5C378'; g.fillRect(90, yAccent, 150, 6);
 
     /* métricas -- tonelaje total en dorado (métrica protagonista del
        directiva de la Story Card), series en cyan técnico, tiempo neutro */
@@ -5354,7 +5467,7 @@ header.masthead.hd-top::before,header.masthead.hd-top::after{display:none !impor
       { k:'SERIES COMPLETADAS', v: String(d.series), u:'SETS', col:'#38BDF8' },
       { k:'TIEMPO DE ENTRENAMIENTO', v: d.tiempo, u:'', col:'#FFFFFF' }
     ];
-    let y = 640;
+    let y = yAccent + 60;
     cajas.forEach(b => {
       g.fillStyle = 'rgba(255,255,255,.045)';
       redondear(g, 90, y, W - 180, 194, 28); g.fill();
@@ -5472,6 +5585,13 @@ header.masthead.hd-top::before,header.masthead.hd-top::after{display:none !impor
         fecha: f.toLocaleDateString('es-AR', { day:'2-digit', month:'long', year:'numeric' }),
         sesion: (day.short || '') + ' · ' + (day.label || ''),
         disciplina: (PROGRAM_CONFIG.mesoName || 'Coach JP') + ' — ' + (WEEKS_META[state.currentWeek] || {}).name,
+        /* directiva (fix integral StoryCard): día/semana y título de la
+           sesión por separado -- "sesion"/"disciplina" de arriba quedan
+           intactos (los sigue leyendo champion()), estos son sólo para
+           el nuevo encabezado de 3 líneas de dibujar(). */
+        diaCorto: day.short || '',
+        semanaN: (state.currentWeek || 0) + 1,
+        tituloSesion: day.label || (day.short || 'Sesión'),
         vol: r.vol, series: r.series, tiempo: tiempoFmt,
         prs: (state.session && state.session.prs) || []
       });
@@ -6067,7 +6187,7 @@ header.masthead.hd-top::before,header.masthead.hd-top::after{display:none !impor
       encolar({ tipo:'pr', ex: ex, kg: parseFloat(kg), reps: parseInt(reps, 10) || 1, e1rm: nuevo1rm });
     pintarHub();
     return { ex: ex, kg: kg, reps: reps, e1rm: nuevo1rm, esPR: esPR, primera: primera,
-             mejora: Math.round((nuevo1rm - antes1rm) * 10) / 10 };
+             mejora: Math.round((nuevo1rm - antes1rm) * 10) / 10, prevKg: prev };
   }
   window.CoachAnotarMarca = anotarMarca;
 
@@ -6369,7 +6489,15 @@ header.masthead.hd-top::before,header.masthead.hd-top::after{display:none !impor
       state.session.prs = state.session.prs || [];
       if(state.session.prs.indexOf(ex) < 0) state.session.prs.push(ex);
       state.session.prDetalle = state.session.prDetalle || [];
-      state.session.prDetalle.push({ ex: ex, kg: kg, reps: reps, e1rm: r.e1rm });
+      /* directiva (reparación reporte WhatsApp): prDetalle es el log real
+         de marcas de TODO el mesociclo (nunca se resetea, ver comentario
+         junto a renderContextoSesion más arriba en el archivo) -- para
+         que el reporte de WhatsApp pueda filtrar "sólo los PR de HOY" en
+         vez de arrastrar el historial completo, cada entrada suma su
+         propia fecha. delta/prevKg quedan también para poder mostrar
+         "70kg × 10 (+5kg)" en vez de sólo el nombre suelto. */
+      state.session.prDetalle.push({ ex: ex, kg: kg, reps: reps, e1rm: r.e1rm,
+        fecha: hoy(), prevKg: r.prevKg, delta: (r.prevKg > 0) ? Math.round((kg - r.prevKg) * 100) / 100 : null });
       saveProgress();
     }
   }
@@ -6457,12 +6585,20 @@ header.masthead.hd-top::before,header.masthead.hd-top::after{display:none !impor
   function champion(d){
     var c = document.getElementById('storyCanvas'), g = c.getContext('2d');
     g.clearRect(0, 0, W, HH);
-    g.fillStyle = '#08090B'; g.fillRect(0, 0, W, HH);
+    /* fondo -- Dark Stealth Tactical, mismo tratamiento que dibujar() para
+       que los dos estilos de Story Card (Cyber-Grit / PR Champion) no
+       desentonen al cambiar de uno a otro. */
+    var bgCh = g.createLinearGradient(0, 0, 0, HH);
+    bgCh.addColorStop(0, '#0a0c10'); bgCh.addColorStop(1, '#121820');
+    g.fillStyle = bgCh; g.fillRect(0, 0, W, HH);
+    var vigCh = g.createRadialGradient(W / 2, HH / 2, HH * .28, W / 2, HH / 2, HH * .72);
+    vigCh.addColorStop(0, 'rgba(0,0,0,0)'); vigCh.addColorStop(1, 'rgba(0,0,0,.45)');
+    g.fillStyle = vigCh; g.fillRect(0, 0, W, HH);
     var r1 = g.createRadialGradient(W / 2, 520, 60, W / 2, 520, 1000);
-    r1.addColorStop(0, 'rgba(229,195,120,.28)'); r1.addColorStop(1, 'rgba(229,195,120,0)');
+    r1.addColorStop(0, 'rgba(210,121,63,.24)'); r1.addColorStop(1, 'rgba(210,121,63,0)');
     g.fillStyle = r1; g.fillRect(0, 0, W, HH);
     var r2 = g.createRadialGradient(W / 2, HH - 260, 40, W / 2, HH - 260, 760);
-    r2.addColorStop(0, 'rgba(56,189,248,.14)'); r2.addColorStop(1, 'rgba(56,189,248,0)');
+    r2.addColorStop(0, 'rgba(124,197,232,.14)'); r2.addColorStop(1, 'rgba(124,197,232,0)');
     g.fillStyle = r2; g.fillRect(0, 0, W, HH);
     /* marco cepillado -- Luxury Stealth: dorado en vez de naranja */
     g.strokeStyle = 'rgba(229,195,120,.55)'; g.lineWidth = 4;
@@ -7271,9 +7407,12 @@ body.ses-paused .set-tracker,body.ses-paused .jp-tools,body.ses-paused .rir-bar{
     var y = 1508;
     var ancho = W - 180;
 
-    /* limpia la franja inferior para reescribirla */
+    /* limpia la franja inferior para reescribirla -- #121820 (no #08090B)
+       para que no quede una costura visible contra el nuevo fondo en
+       degradé "Dark Stealth Tactical" de dibujar()/champion() (el pie de
+       la tarjeta cae justo en la parte más oscura del gradiente). */
     g.save();
-    g.fillStyle = '#08090B';
+    g.fillStyle = '#121820';
     g.fillRect(70, y - 16, W - 140, HH - y + 16);
     if(dorado){
       var rg = g.createRadialGradient(W / 2, HH - 260, 40, W / 2, HH - 260, 760);
@@ -11706,14 +11845,33 @@ body.cf-modo .block .block-body > .cf-levels{display:block !important}
   function esc(s){
     return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
+  /* rótulo táctico del bloque para prefijar cada fase ("[ CALENTAMIENTO ·
+     FASE 1: ... ]") -- el mismo esWarm() cubre entrada en calor Y vuelta
+     a la calma bajo un único diseño (.wu-card), así que el prefijo tiene
+     que distinguir cuál de los dos es para no rotular un cool-down como
+     "Calentamiento". Los corchetes los pone el CSS (.wu-fase::before/
+     ::after); acá sólo se arma el texto de adentro. */
+  var RX_ENFRIAMIENTO = /cool.?down|vuelta a la calma|enfriamiento/i;
+  function prefijoFase(b){
+    var t = ((b && b.title) || '') + ' ' + ((b && b.subtitle) || '');
+    return RX_ENFRIAMIENTO.test(t) ? 'ENFRIAMIENTO' : 'CALENTAMIENTO';
+  }
   /* separa la dosis (tiempo, reps, distancia) del nombre del ejercicio */
   function partir(txt){
     var t = String(txt || '').replace(/\s+/g, ' ').trim();
     if(!t) return null;
     var dosis = '', nombre = t;
     var m;
-    /* «Row 4 min», «Bicicleta o cinta — 6 min progresivos» */
-    if((m = t.match(/^(.*?)\s*[—–-]\s*(.+)$/)) && /\d/.test(m[2])){
+    /* «Row 4 min», «Bicicleta o cinta — 6 min progresivos» -- \s+ (no \s*)
+       alrededor del guion a propósito: un guion sin espacio a los lados
+       casi siempre es parte de un nombre compuesto ("Pass-Through",
+       "Sit-up", "Face-pull"), no el separador nombre/dosis. Con \s*
+       .*? no-codicioso paraba en ESE guion interno (ej. "Banded Pass" +
+       "Through — 15 reps", que igual "parecía" válido porque el resto
+       tenía un dígito) y perdía la dosis real más adelante. Exigir
+       espacio real de los dos lados obliga a saltar los guiones de
+       compuestos y llegar al separador real. */
+    if((m = t.match(/^(.*?)\s+[—–-]\s+(.+)$/)) && /\d/.test(m[2])){
       nombre = m[1].trim(); dosis = m[2].trim();
     }
     /* «3x12 Curl», «2x15 Face pull» */
@@ -11781,10 +11939,11 @@ body.cf-modo .block .block-body > .cf-levels{display:block !important}
          a video. Se conserva el <a class="video-link"> original tal cual
          (mismo data-yt/thumbnail que ya arma videoLinkHtml) y se reinserta
          a la derecha del nombre, igual que en los bloques principales. */
+      var prefijo = prefijoFase(b);
       var html = filas.map(function(f){
         var t = String(f.txt).replace(/\s+/g, ' ').trim();
         if(f.head || /^\d+\s*[\.\)]\s/.test(t) || /:$/.test(t))
-          return '<div class="wu-fase">' + esc(t.replace(/^\d+\s*[\.\)]\s*/, '').replace(/:$/, '')) + '</div>';
+          return '<div class="wu-fase">' + esc(prefijo + ' \u00b7 ' + t.replace(/^\d+\s*[\.\)]\s*/, '').replace(/:$/, '')) + '</div>';
         var p = partir(t);
         if(!p) return '';
         return '<div class="wu-item">' +
@@ -11889,17 +12048,24 @@ body.cf-modo .block .block-body > .cf-levels{display:block !important}
 /* =========================================================
    COACH JP · WARM-UP LIMPIO + RELOJ DE DESCANSO ACTIVO
 ========================================================= */
-/* ---------- protocolo de entrada en calor ---------- */
-.wu-list{gap:8px !important;line-height:1.6 !important;padding:12px 13px !important}
+/* ---------- protocolo de entrada en calor (armonización Concepto F) ---------- */
+.wu-list{display:flex !important;flex-direction:column;gap:8px !important;padding:12px 13px !important;line-height:1.6 !important;box-sizing:border-box;max-width:100%}
+/* cada ejercicio vive en su propia tarjeta táctica -- antes era una fila
+   suelta dentro de .wu-list, sin fondo ni borde propio, que era justo lo
+   que hacía que un ítem "sin caja" (el bug de arriba, claseDe()) se
+   sintiera roto: no había ninguna superficie que lo sostuviera. */
 .wu-list .wu-item{
-  display:flex;align-items:baseline;gap:10px;padding:4px 2px;border-bottom:none !important;
-  line-height:1.6;
+  display:flex !important;align-items:center;gap:10px;
+  padding:10px 12px;margin:0;border-bottom:none !important;
+  background:rgba(10,12,15,.55) !important;border:1px solid #262626 !important;border-radius:12px !important;
+  box-sizing:border-box;max-width:100%;min-width:0;line-height:1.4;
+  transform:translateZ(0);
 }
 .wu-list .wu-dose{
-  flex:0 0 auto;min-width:0;text-align:center;padding:2px 9px;border-radius:6px;
-  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);
+  flex:0 0 auto;min-width:0;text-align:center;padding:3px 9px;border-radius:6px;
+  background:rgba(124,197,232,.08);border:1px solid rgba(124,197,232,.22);
   font-family:'JetBrains Mono',ui-monospace,monospace;font-size:0.68rem;font-weight:700;
-  color:rgba(255,255,255,0.78);white-space:nowrap;
+  color:var(--jp-cyan,#7CC5E8);white-space:nowrap;
 }
 /* la línea sin dosis no lleva caja: sólo un bullet discreto */
 .wu-list .wu-item.plain{gap:9px}
@@ -11907,17 +12073,27 @@ body.cf-modo .block .block-body > .cf-levels{display:block !important}
   flex:0 0 auto;width:4px;height:4px;border-radius:50%;margin-top:8px;
   background:rgba(255,255,255,0.28);
 }
-.wu-list .wu-name{line-height:1.6}
-/* subtítulos internos: acento sin caja */
+.wu-list .wu-name{flex:1 1 auto;min-width:0;line-height:1.4;overflow-wrap:break-word}
+/* el thumbnail de video, si lo hay, siempre pegado al borde derecho de
+   la tarjeta -- nunca pegado al nombre ni suelto en medio de la fila. */
+.wu-list .wu-item .video-link{flex:0 0 auto;margin-left:auto !important}
+/* rótulo de fase: mismo lenguaje táctico que el resto de la app
+   (corchetes + monoespaciado + acento de marca), no más texto plano
+   naranja. El prefijo "CALENTAMIENTO"/"ENFRIAMIENTO" lo arma warmup()
+   en JS (según el bloque sea entrada en calor o vuelta a la calma) --
+   acá sólo se envuelve entre corchetes, igual que .block-label. */
 .wu-list .wu-fase{
-  margin:10px 0 1px;padding:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;
-  font-size:0.76rem;letter-spacing:0.15em;text-transform:uppercase;color:#FFB067;
+  margin:14px 0 6px;padding:0;font-family:var(--font-mono,'JetBrains Mono',monospace);
+  font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--jp-cyan,#7CC5E8);white-space:normal;overflow-wrap:break-word;
 }
+.wu-list .wu-fase::before{content:"[ ";opacity:.75;color:var(--jp-gold,#D2793F)}
+.wu-list .wu-fase::after{content:" ]";opacity:.75;color:var(--jp-gold,#D2793F)}
 .wu-list .wu-fase:first-child{margin-top:0}
 /* instrucción larga: texto sutil, sin bullet ni caja */
 .wu-list .wu-nota{
   font-family:'Inter',sans-serif;font-size:0.79rem;line-height:1.6;
-  color:rgba(255,255,255,0.55);padding:2px 0;
+  color:rgba(255,255,255,0.55);padding:2px 0;overflow-wrap:break-word;
 }
 /* ---------- reloj de descanso ---------- */
 #restHud{z-index:260 !important}
@@ -11938,6 +12114,14 @@ body.cf-modo .block .block-body > .cf-levels{display:block !important}
   }
   function esc(s){
     return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  /* mismo prefijo táctico que arma warmup() -- IIFE aparte, sin helpers
+     compartidos, así que se repite acá (ver comentario largo junto al
+     original). */
+  var RX_ENFRIAMIENTO = /cool.?down|vuelta a la calma|enfriamiento/i;
+  function prefijoFase(b){
+    var t = ((b && b.title) || '') + ' ' + ((b && b.subtitle) || '');
+    return RX_ENFRIAMIENTO.test(t) ? 'ENFRIAMIENTO' : 'CALENTAMIENTO';
   }
 
   /* ---------------------------------------------------------
@@ -11960,8 +12144,19 @@ body.cf-modo .block .block-body > .cf-levels{display:block !important}
     /* si declara una dosis en el texto, es trabajo y no un subtítulo */
     if(/\d/.test(t) && /(\bmin\b|\bseg\b|\d\s*s\b|\breps?\b|[x×]\s*\d|\d\s*\/\s*\d|\bm\b|\bcal\b)/i.test(t)) return 'item';
     if(/:\s*$/.test(t) || RX_FASE.test(t)) return 'fase';
-    /* sin dosis: subtítulo si es corto, instrucción si es una frase */
-    return (t.length <= 46 && !/[.,;]/.test(t)) ? 'fase' : 'nota';
+    /* pulido (armonización Concepto F): "es corto y sin puntuación" ya no
+       se usa como aproximación de "debe ser un subtítulo de fase" -- eso
+       atrapaba ejercicios reales sin dosis explícita (técnica corporal,
+       movilidad libre: "Eccentric Hip Flexor Sit-up", "Dead Bug con
+       control respiratorio") y los mostraba como texto plano de sección
+       en vez de tarjeta de ejercicio, justo el bug reportado. Misma
+       filosofía que el fix de "la dosis manda primero" de arriba: sin
+       coincidir con una palabra clave de fase reconocida (RX_FASE) ni
+       terminar en ":", se asume ítem de trabajo -- limpiar() ya sabe
+       darle el chip "MOB" cuando no hay dosis numérica. Una frase larga
+       con puntuación real (instrucción del coach, no nombre de
+       ejercicio) sigue yendo a "nota". */
+    return /[.,;]/.test(t) ? 'nota' : 'item';
   }
   function limpiar(){
     document.querySelectorAll('.block.wu-card .wu-list').forEach(function(lista){
@@ -11975,9 +12170,11 @@ body.cf-modo .block .block-body > .cf-levels{display:block !important}
         var cls = claseDe(txt, dosis);
         var vid = it.querySelector('.video-link'); /* se preserva al reclasificar */
         if(cls === 'fase'){
+          var blDe = it.closest('.block');
+          var bDe = blDe ? bloqueDe(blDe.dataset.blockId) : null;
           var f = document.createElement('div');
           f.className = 'wu-fase';
-          f.textContent = txt.replace(/^\d+\s*[\.\)]\s*/, '').replace(/:\s*$/, '');
+          f.textContent = prefijoFase(bDe) + ' \u00b7 ' + txt.replace(/^\d+\s*[\.\)]\s*/, '').replace(/:\s*$/, '');
           it.parentNode.replaceChild(f, it);
           return;
         }
